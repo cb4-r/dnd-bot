@@ -1,0 +1,15 @@
+{
+  "name": "dnd5e-compendio-bot",
+  "version": "1.0.0",
+  "description": "Bot de Discord para consultar el compendio de D&D 5e",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "node-fetch": "^2.7.0",
+    "dotenv": "^16.4.5"
+  }
+}
