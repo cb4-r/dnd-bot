@@ -1,0 +1,205 @@
+const { EmbedBuilder } = require('discord.js');
+const { truncate, formatSpeed } = require('./helpers');
+
+const sourceLabel = e => e._source === 'local' ? 'Local' : 'Open5e API';
+const footer      = e => `Source: ${e.document__title || 'SRD 5e'} • ${sourceLabel(e)}`;
+
+function embedSpell(spell) {
+  const level = spell.level_int === 0 ? 'Cantrip' : `Level ${spell.level_int}`;
+  const embed = new EmbedBuilder()
+    .setTitle(`🔮 ${spell.name}`)
+    .setColor(0x7B2FBE)
+    .setDescription(truncate(spell.desc, 400))
+    .addFields(
+      { name: 'Level', value: level, inline: true },
+      { name: 'School', value: spell.school || '—', inline: true },
+      { name: 'Casting Time', value: spell.casting_time || '—', inline: true },
+      { name: 'Range', value: spell.range || '—', inline: true },
+      { name: 'Duration', value: spell.duration || '—', inline: true },
+      { name: 'Components', value: spell.components || '—', inline: true },
+    );
+  if (spell.higher_level) embed.addFields({ name: '📈 At Higher Levels', value: truncate(spell.higher_level, 512) });
+  if (spell.concentration === 'yes') embed.addFields({ name: '⚠️', value: 'Requires concentration', inline: true });
+  embed.setFooter({ text: footer(spell) });
+  return embed;
+}
+
+function embedMonster(monster) {
+  const embed = new EmbedBuilder()
+    .setTitle(`🐉 ${monster.name}`)
+    .setColor(0xC0392B)
+    .setDescription(`*${monster.size} ${monster.type}, ${monster.alignment}*`)
+    .addFields(
+      { name: '❤️ Hit Points', value: `${monster.hit_points} (${monster.hit_dice})`, inline: true },
+      { name: '🛡️ Armor Class', value: String(monster.armor_class), inline: true },
+      { name: '💨 Speed', value: monster.speed || '—', inline: true },
+      { name: '💪 STR', value: String(monster.strength), inline: true },
+      { name: '🤸 DEX', value: String(monster.dexterity), inline: true },
+      { name: '🏋️ CON', value: String(monster.constitution), inline: true },
+      { name: '🧠 INT', value: String(monster.intelligence), inline: true },
+      { name: '👁️ WIS', value: String(monster.wisdom), inline: true },
+      { name: '✨ CHA', value: String(monster.charisma), inline: true },
+      { name: '⚔️ CR', value: String(monster.challenge_rating), inline: true },
+    );
+  if (monster.senses) embed.addFields({ name: '👁️ Senses', value: monster.senses, inline: true });
+  if (monster.languages) embed.addFields({ name: '🗣️ Languages', value: monster.languages, inline: true });
+  if (monster.special_abilities?.length) {
+    const abilities = monster.special_abilities.slice(0, 3)
+      .map(a => `**${a.name}:** ${truncate(a.desc, 150)}`).join('\n');
+    embed.addFields({ name: '✨ Special Abilities', value: abilities });
+  }
+  if (monster.actions?.length) {
+    const actions = monster.actions.slice(0, 3)
+      .map(a => `**${a.name}:** ${truncate(a.desc, 150)}`).join('\n');
+    embed.addFields({ name: '⚔️ Actions', value: actions });
+  }
+  embed.setFooter({ text: footer(monster) });
+  return embed;
+}
+
+function embedItem(item) {
+  const embed = new EmbedBuilder()
+    .setTitle(`⚗️ ${item.name}`)
+    .setColor(0xF39C12)
+    .setDescription(truncate(item.desc, 800))
+    .addFields(
+      { name: 'Type', value: item.type || '—', inline: true },
+      { name: 'Rarity', value: item.rarity || '—', inline: true },
+    );
+  if (item.requires_attunement) embed.addFields({ name: '🔗 Attunement', value: item.requires_attunement, inline: true });
+  embed.setFooter({ text: footer(item) });
+  return embed;
+}
+
+function embedClass(cls) {
+  const embed = new EmbedBuilder()
+    .setTitle(`⚔️ ${cls.name}`)
+    .setColor(0x27AE60)
+    .setDescription(truncate(cls.desc, 500))
+    .addFields(
+      { name: '🎲 Hit Die', value: cls.hit_dice ? `d${cls.hit_dice}` : '—', inline: true },
+    );
+  if (cls.saving_throws) embed.addFields({ name: '🛡️ Saving Throws', value: cls.saving_throws, inline: true });
+  if (cls.prof_armor)    embed.addFields({ name: '🧥 Armor', value: truncate(cls.prof_armor, 200), inline: true });
+  if (cls.prof_skills && cls.prof_skills !== '—') {
+    embed.addFields({ name: '📖 Skill Proficiencies', value: truncate(cls.prof_skills, 300) });
+  }
+  if (cls.archetypes?.length) {
+    const list = cls.archetypes.map(a => `• ${a.name}`).join('\n');
+    embed.addFields({ name: `🌿 ${cls.subtypes_name || 'Subclasses'}`, value: truncate(list, 600) });
+  } else if (cls.subtypes_name) {
+    embed.addFields({ name: '🌿 Subclasses', value: cls.subtypes_name, inline: true });
+  }
+  embed.setFooter({ text: footer(cls) });
+  return embed;
+}
+
+function embedRace(race) {
+  const embed = new EmbedBuilder()
+    .setTitle(`🧝 ${race.name}`)
+    .setColor(0x2980B9)
+    .setDescription(truncate(race.desc, 500))
+    .addFields(
+      { name: '🏃 Speed',     value: race.speed_desc || formatSpeed(race.speed), inline: true },
+      { name: '📏 Size',      value: race.size       || '—',                     inline: true },
+      { name: '🌐 Languages', value: race.languages  || '—',                     inline: true },
+    );
+  if (race.asi)    embed.addFields({ name: '⬆️ Ability Score Increase', value: truncate(race.asi, 300) });
+  if (race.traits) embed.addFields({ name: '✨ Racial Traits', value: truncate(race.traits, 500) });
+  if (race.subraces?.length) {
+    const list = race.subraces.map(s => `• ${s.name}`).join('\n');
+    embed.addFields({ name: '🔀 Subraces', value: list });
+  }
+  embed.setFooter({ text: footer(race) });
+  return embed;
+}
+
+function embedBackground(bg) {
+  const embed = new EmbedBuilder()
+    .setTitle(`📜 ${bg.name}`)
+    .setColor(0x8E44AD)
+    .setDescription(truncate(bg.desc, 600))
+    .addFields(
+      { name: '🛠️ Skill Proficiencies', value: bg.skill_proficiencies || '—', inline: true },
+      { name: '🌐 Languages', value: bg.languages || 'None', inline: true },
+    );
+  if (bg.feature) embed.addFields({ name: `✨ Feature: ${bg.feature}`, value: truncate(bg.feature_desc, 512) });
+  embed.setFooter({ text: footer(bg) });
+  return embed;
+}
+
+function embedFeat(feat) {
+  const embed = new EmbedBuilder()
+    .setTitle(`🌟 ${feat.name}`)
+    .setColor(0x9B59B6)
+    .setDescription(truncate(feat.desc, 700));
+  if (feat.prerequisite) embed.addFields({ name: '📋 Prerequisite', value: feat.prerequisite, inline: true });
+  if (feat.effects_desc?.length) {
+    embed.addFields({ name: '✨ Effects', value: truncate(feat.effects_desc.join('\n'), 600) });
+  }
+  embed.setFooter({ text: footer(feat) });
+  return embed;
+}
+
+function embedCondition(condition) {
+  return new EmbedBuilder()
+    .setTitle(`🔴 ${condition.name}`)
+    .setColor(0xE74C3C)
+    .setDescription(truncate(condition.desc, 1500))
+    .setFooter({ text: footer(condition) });
+}
+
+function embedWeapon(weapon) {
+  const damage = weapon.damage_dice
+    ? `${weapon.damage_dice} ${weapon.damage_type}`
+    : '—';
+  const embed = new EmbedBuilder()
+    .setTitle(`🗡️ ${weapon.name}`)
+    .setColor(0xC0392B)
+    .addFields(
+      { name: 'Category', value: weapon.category || '—', inline: true },
+      { name: 'Damage', value: damage, inline: true },
+      { name: 'Cost', value: weapon.cost || '—', inline: true },
+      { name: 'Weight', value: weapon.weight || '—', inline: true },
+    );
+  if (weapon.properties?.length) {
+    embed.addFields({ name: '⚙️ Properties', value: weapon.properties.join(', ') });
+  }
+  embed.setFooter({ text: footer(weapon) });
+  return embed;
+}
+
+function embedArmor(armor) {
+  const embed = new EmbedBuilder()
+    .setTitle(`🛡️ ${armor.name}`)
+    .setColor(0x7F8C8D)
+    .addFields(
+      { name: 'Category', value: armor.category || '—', inline: true },
+      { name: 'AC', value: armor.ac_string || String(armor.base_ac) || '—', inline: true },
+      { name: 'Cost', value: armor.cost || '—', inline: true },
+      { name: 'Weight', value: armor.weight || '—', inline: true },
+    );
+  if (armor.strength_requirement) {
+    embed.addFields({ name: '💪 Strength Required', value: String(armor.strength_requirement), inline: true });
+  }
+  if (armor.stealth_disadvantage) {
+    embed.addFields({ name: '⚠️ Stealth', value: 'Disadvantage', inline: true });
+  }
+  embed.setFooter({ text: footer(armor) });
+  return embed;
+}
+
+function embedRule(section) {
+  const embed = new EmbedBuilder()
+    .setTitle(`📖 ${section.name}`)
+    .setColor(0x34495E)
+    .setDescription(truncate(section.desc, 1500));
+  if (section.parent) embed.addFields({ name: 'Chapter', value: section.parent, inline: true });
+  embed.setFooter({ text: footer(section) });
+  return embed;
+}
+
+module.exports = {
+  embedSpell, embedMonster, embedItem, embedClass, embedRace, embedBackground,
+  embedFeat, embedCondition, embedWeapon, embedArmor, embedRule,
+};
