@@ -76,6 +76,7 @@ npm start        — Iniciar el bot
 
 - [ ] Agregar más traducciones español→inglés en `TRANSLATIONS` según necesidad
 - [ ] Para clases/razas/trasfondos desde local: los campos estructurados (hit_dice, speed, skill_proficiencies) no están disponibles en dnd-data — solo se muestra la descripción en texto
+- [x] Implementar comando `/wildmagic`: tira 1d100 y muestra el efecto correspondiente de la tabla Oleada de Magia Salvaje. Datos embebidos en `commands/wildmagic.js`.
 
 ---
 
@@ -100,3 +101,13 @@ npm start        — Iniciar el bot
 - Modificado `utils/embeds.js`: footer dinámico muestra `• Local` o `• Open5e API` según la fuente. Corregido bug de `"dnull"` en `embedClass` cuando `hit_dice` es null.
 - Sin cambios en comandos ni en `index.js` — la integración es transparente para la capa de comandos.
 - Pendiente: prueba live del bot en Discord (paso 3).
+
+### [2026-04-23] — Tabla Oleada de Magia Salvaje (asset)
+- Revisadas dos imágenes (`image copy 2.png`, `image copy 3.png`) que contenían la tabla completa de Oleada de Magia Salvaje dividida en dos partes.
+- Transcriptas y combinadas en `oleada-magia-salvaje.md`: 50 entradas (d100 01-02 a 99-00) en una sola tabla Markdown.
+- El archivo es la fuente de datos para el futuro comando `/wildmagic` (ver Tareas Pendientes). No requiere API externa.
+
+### [2026-04-24] — Comando /wildmagic + scripts de inicio
+- Creado `commands/wildmagic.js`: tira 1d100, mapea al rango de la tabla con `Math.floor((roll-1)/2)`, y devuelve un embed con el resultado y el efecto. Los 50 efectos van embebidos directamente en el archivo.
+- Desplegado en Discord con `npm run deploy`.
+- Creados `start-bot.bat` y `deploy-and-start.bat` en la raíz del proyecto para inicio con doble clic desde el escritorio.
