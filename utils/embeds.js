@@ -1,6 +1,20 @@
 const { EmbedBuilder } = require('discord.js');
 const { truncate, formatSpeed } = require('./helpers');
 
+const _GAME_TERMS = /\b(?:action|bonus action|reaction|your turn|attack|saving throw|ability check|hit points?|proficiency|advantage|disadvantage|spell|combat|damage|armor class|d[468]\b|d1[02]\b|d20\b|dc\s*\d|speed|initiative|concentration|casting|modifier|spellcasting|hit dice|spell slot)\b/i;
+
+function _skipLoreIntros(desc) {
+  if (desc.length < 1200) return desc;
+  const paras = desc.split('\n\n');
+  let startIdx = 0;
+  for (let i = 0; i < Math.min(paras.length - 1, 5); i++) {
+    const p = paras[i].trim();
+    if (/^#+\s/.test(p) || /^\*\*/.test(p) || _GAME_TERMS.test(p)) break;
+    startIdx = i + 1;
+  }
+  return paras.slice(startIdx).join('\n\n').trim();
+}
+
 const sourceLabel = e => e._source === 'local' ? 'Local' : 'Open5e API';
 const footer      = e => `Source: ${e.document__title || 'SRD 5e'} • ${sourceLabel(e)}`;
 
@@ -58,12 +72,17 @@ function embedMonster(monster) {
 }
 
 function embedItem(item) {
+  let desc = item.desc || '';
+  // Strip redundant "Item Name Type, rarity" header present in dnd-data local entries
+  if (desc.toLowerCase().startsWith(item.name.toLowerCase())) {
+    desc = desc.replace(/^.+?\b(?:common|uncommon|rare|very rare|legendary|artifact)\b\s*/i, '').trim();
+  }
   const embed = new EmbedBuilder()
     .setTitle(`⚗️ ${item.name}`)
     .setColor(0xF39C12)
-    .setDescription(truncate(item.desc, 800))
+    .setDescription(truncate(desc, 700))
     .addFields(
-      { name: 'Type', value: item.type || '—', inline: true },
+      { name: 'Type',   value: item.type   || '—', inline: true },
       { name: 'Rarity', value: item.rarity || '—', inline: true },
     );
   if (item.requires_attunement) embed.addFields({ name: '🔗 Attunement', value: item.requires_attunement, inline: true });
@@ -75,14 +94,16 @@ function embedClass(cls) {
   const embed = new EmbedBuilder()
     .setTitle(`⚔️ ${cls.name}`)
     .setColor(0x27AE60)
-    .setDescription(truncate(cls.desc, 500))
     .addFields(
-      { name: '🎲 Hit Die', value: cls.hit_dice ? `d${cls.hit_dice}` : '—', inline: true },
+      { name: '🎲 Hit Die',        value: cls.hit_dice ? `d${cls.hit_dice}` : '—',            inline: true },
+      { name: '🛡️ Saving Throws',  value: cls.saving_throws || '—',                            inline: true },
+      { name: '🧥 Armor',          value: cls.prof_armor    || '—',                            inline: true },
     );
-  if (cls.saving_throws) embed.addFields({ name: '🛡️ Saving Throws', value: cls.saving_throws, inline: true });
-  if (cls.prof_armor)    embed.addFields({ name: '🧥 Armor', value: truncate(cls.prof_armor, 200), inline: true });
+  if (cls.prof_weapons) {
+    embed.addFields({ name: '⚔️ Weapons', value: cls.prof_weapons });
+  }
   if (cls.prof_skills && cls.prof_skills !== '—') {
-    embed.addFields({ name: '📖 Skill Proficiencies', value: truncate(cls.prof_skills, 300) });
+    embed.addFields({ name: '📖 Skills', value: cls.prof_skills });
   }
   if (cls.archetypes?.length) {
     const list = cls.archetypes.map(a => `• ${a.name}`).join('\n');
@@ -98,32 +119,40 @@ function embedRace(race) {
   const embed = new EmbedBuilder()
     .setTitle(`🧝 ${race.name}`)
     .setColor(0x2980B9)
-    .setDescription(truncate(race.desc, 500))
     .addFields(
-      { name: '🏃 Speed',     value: race.speed_desc || formatSpeed(race.speed), inline: true },
-      { name: '📏 Size',      value: race.size       || '—',                     inline: true },
-      { name: '🌐 Languages', value: race.languages  || '—',                     inline: true },
+      { name: '🏃 Speed',     value: race.speed_desc || formatSpeed(race.speed) || '—', inline: true },
+      { name: '📏 Size',      value: race.size       || '—',                             inline: true },
+      { name: '🌐 Languages', value: race.languages  || '—',                             inline: true },
     );
   if (race.asi)    embed.addFields({ name: '⬆️ Ability Score Increase', value: truncate(race.asi, 300) });
   if (race.traits) embed.addFields({ name: '✨ Racial Traits', value: truncate(race.traits, 500) });
   if (race.subraces?.length) {
-    const list = race.subraces.map(s => `• ${s.name}`).join('\n');
-    embed.addFields({ name: '🔀 Subraces', value: list });
+    embed.addFields({ name: '🔀 Subraces', value: race.subraces.map(s => `• ${s.name}`).join('\n') });
   }
   embed.setFooter({ text: footer(race) });
   return embed;
 }
 
 function embedBackground(bg) {
+  const hasParsed = bg.skill_proficiencies || bg.feature;
   const embed = new EmbedBuilder()
     .setTitle(`📜 ${bg.name}`)
-    .setColor(0x8E44AD)
-    .setDescription(truncate(bg.desc, 600))
-    .addFields(
-      { name: '🛠️ Skill Proficiencies', value: bg.skill_proficiencies || '—', inline: true },
-      { name: '🌐 Languages', value: bg.languages || 'None', inline: true },
+    .setColor(0x8E44AD);
+
+  if (hasParsed) {
+    embed.addFields(
+      { name: '🛠️ Skills',    value: bg.skill_proficiencies || '—', inline: true },
+      { name: '🌐 Languages', value: bg.languages           || '—', inline: true },
     );
-  if (bg.feature) embed.addFields({ name: `✨ Feature: ${bg.feature}`, value: truncate(bg.feature_desc, 512) });
+    if (bg.tools) embed.addFields({ name: '🔧 Tools', value: bg.tools, inline: true });
+    if (bg.feature) {
+      embed.addFields({ name: `✨ Feature: ${bg.feature}`, value: truncate(bg.feature_desc || '—', 300) });
+    }
+  } else {
+    // Parsing yielded nothing — fall back to raw description
+    embed.setDescription(truncate(bg._fallback_desc || bg.desc || '', 600));
+  }
+
   embed.setFooter({ text: footer(bg) });
   return embed;
 }
@@ -131,11 +160,14 @@ function embedBackground(bg) {
 function embedFeat(feat) {
   const embed = new EmbedBuilder()
     .setTitle(`🌟 ${feat.name}`)
-    .setColor(0x9B59B6)
-    .setDescription(truncate(feat.desc, 700));
+    .setColor(0x9B59B6);
   if (feat.prerequisite) embed.addFields({ name: '📋 Prerequisite', value: feat.prerequisite, inline: true });
   if (feat.effects_desc?.length) {
-    embed.addFields({ name: '✨ Effects', value: truncate(feat.effects_desc.join('\n'), 600) });
+    // effects_desc is the mechanic — skip lore desc when structured effects exist
+    embed.addFields({ name: '✨ Effects', value: truncate(feat.effects_desc.join('\n'), 1000) });
+  } else {
+    // No structured effects — the desc itself is the rule
+    embed.setDescription(truncate(feat.desc, 900));
   }
   embed.setFooter({ text: footer(feat) });
   return embed;
@@ -190,11 +222,12 @@ function embedArmor(armor) {
 }
 
 function embedRule(section) {
+  const desc = _skipLoreIntros(section.desc || '');
   const embed = new EmbedBuilder()
     .setTitle(`📖 ${section.name}`)
     .setColor(0x34495E)
-    .setDescription(truncate(section.desc, 1500));
-  if (section.parent) embed.addFields({ name: 'Chapter', value: section.parent, inline: true });
+    .setDescription(truncate(desc, 1200));
+  if (section.parent) embed.addFields({ name: '📂 Chapter', value: section.parent, inline: true });
   embed.setFooter({ text: footer(section) });
   return embed;
 }

@@ -11,6 +11,7 @@
     "discord.js": "^14.14.1",
     "dnd-data": "^1.0.0",
     "dotenv": "^16.4.5",
+    "fuse.js": "^7.3.0",
     "node-fetch": "^2.7.0"
   }
 }

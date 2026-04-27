@@ -1,4 +1,5 @@
 const dndData = require('dnd-data');
+const Fuse = require('fuse.js');
 
 // Maps Open5e endpoint names to dnd-data collection keys
 const ENDPOINT_MAP = {
@@ -93,6 +94,33 @@ function parseRaceDesc(desc) {
   return { size, speed, languages: lang, asi, traitNames };
 }
 
+function parseBackgroundDesc(desc) {
+  const d = cleanDesc(desc);
+
+  const skills = grab(d, /Skill Proficiencies?\s*[:.]\s*(.+?)(?=\s+Languages?|\s+Tool|\s+Equipment|\s+Feature[.:]|$)/i);
+  const langs  = grab(d, /Languages?\s*[:.]\s*(.+?)(?=\s+Tool|\s+Equipment|\s+Feature[.:]|$)/i);
+  const tools  = grab(d, /Tool\s+Proficiencies?\s*[:.]\s*(.+?)(?=\s+Languages?|\s+Equipment|\s+Feature[.:]|$)/i);
+
+  let featureName = null;
+  let featureDesc = null;
+  const featIdx = d.search(/Feature[:.]/i);
+  if (featIdx !== -1) {
+    const rest = d.slice(featIdx).replace(/^Feature[:.]\s*/i, '');
+    // Name ends where the description sentence begins
+    const nameEnd = rest.search(/\s+(?:As|You|The|Your|When|At|This|Since|After|Before|While|If|Each|Once|Upon|Although|However)\s/);
+    if (nameEnd > 0) {
+      featureName = rest.slice(0, nameEnd).trim();
+      const afterName = rest.slice(nameEnd).trim();
+      const sentences = afterName.match(/^(?:[^.!?]*[.!?]\s*){1,2}/);
+      featureDesc = sentences ? sentences[0].trim() : afterName.slice(0, 250).trim();
+    } else {
+      featureName = rest.slice(0, 60).trim();
+    }
+  }
+
+  return { skills, langs, tools, featureName, featureDesc };
+}
+
 function parseClassDesc(desc) {
   const d = cleanDesc(desc);
 
@@ -100,21 +128,25 @@ function parseClassDesc(desc) {
   const hitDie = grab(d, /Hit Dice?:\s*1(d\d+)/i);
 
   // Saving Throws: stop before "Skills"
-  const saves  = grab(d, /Saving Throws?:\s*(.+?)(?=\s*Skills?|\s*Armor:|\s*Weapons?:|$)/i);
+  const saves   = grab(d, /Saving Throws?:\s*(.+?)(?=\s*Skills?|\s*Armor:|\s*Weapons?:|$)/i);
 
   // Armor proficiency
-  const armor  = grab(d, /Armor:\s*(.+?)(?=\s*Weapons?:|\s*Tools?:|\s*Saving|\s*Skills?|$)/i);
+  const armor   = grab(d, /Armor:\s*(.+?)(?=\s*Weapons?:|\s*Tools?:|\s*Saving|\s*Skills?|$)/i);
 
-  // Skills
-  const skills = grab(d, /Skills?:\s*(Choose .+?)(?=\s*Equipment:|\s*Tools?:|\s*[A-Z][a-z]+ Proficien|$)/is);
+  // Weapon proficiency
+  const weapons = grab(d, /Weapons?:\s*(.+?)(?=\s*Tools?:|\s*Saving|\s*Skills?|\s*Equipment|$)/i);
 
-  // Primary ability (first ability after "Class Features" or just first ability mentioned)
+  // Skills — stop before "Equipment" (section appears without colon in PHB)
+  const skills  = grab(d, /Skills?:\s*(Choose .+?)(?=\s*Equipment|\s*Tools?:|\s*[A-Z][a-z]+ Proficien|$)/is);
+
+  // Primary ability
   const primary = grab(d, /primary ability(?:\s+score)?(?:\s+is)?\s+(.+?)(?:\.|,|and)/i);
 
   return {
-    hitDie: hitDie ? parseInt(hitDie.replace('d', '')) : null,
+    hitDie:  hitDie ? parseInt(hitDie.replace('d', '')) : null,
     saves,
     armor,
+    weapons,
     skills,
     primary,
   };
@@ -194,14 +226,16 @@ function mapItem(raw) {
 }
 
 function mapBackground(raw) {
+  const parsed = parseBackgroundDesc(raw.description);
   return {
-    name:               raw.name,
-    desc:               cleanDesc(raw.description),
-    skill_proficiencies: '—',
-    languages:          '—',
-    feature:            null,
-    feature_desc:       null,
-    document__title:    raw.book || raw.publisher || 'dnd-data',
+    name:                raw.name,
+    skill_proficiencies: parsed.skills      || null,
+    languages:           parsed.langs       || null,
+    tools:               parsed.tools       || null,
+    feature:             parsed.featureName || null,
+    feature_desc:        parsed.featureDesc || null,
+    _fallback_desc:      cleanDesc(raw.description), // used only when parsing yields nothing
+    document__title:     raw.book || raw.publisher || 'dnd-data',
     _source: 'local',
   };
 }
@@ -213,9 +247,10 @@ function mapClass(raw) {
     name:          raw.name,
     desc,
     hit_dice:      parsed.hitDie,
-    prof_skills:   parsed.skills  || '—',
-    prof_armor:    parsed.armor   || null,
-    saving_throws: parsed.saves   || null,
+    prof_skills:   parsed.skills   || '—',
+    prof_weapons:  parsed.weapons  || null,
+    prof_armor:    parsed.armor    || null,
+    saving_throws: parsed.saves    || null,
     archetypes:    [],
     subtypes_name: null,
     document__title: raw.book || raw.publisher || 'dnd-data',
@@ -250,12 +285,61 @@ const MAPPERS = {
   races:       mapRace,
 };
 
+// ─── Source priority (canonical sources first) ──────────────────────────────
+
+const SOURCE_PRIORITY = [
+  "Player's Handbook",
+  "Player's Handbook (2024)",
+  "System Reference Document",
+  "Free Basic Rules (2014)",
+  "Free Basic Rules (2024)",
+  "Essentials Kit",
+];
+
+function _sourcePriority(entry) {
+  const src = entry.book || entry.publisher || '';
+  const idx = SOURCE_PRIORITY.findIndex(s => src.includes(s));
+  return idx === -1 ? SOURCE_PRIORITY.length : idx;
+}
+
 // ─── Collection access (module is loaded once, so no extra caching needed) ──
 
 function getCollection(endpoint) {
   const collectionKey = ENDPOINT_MAP[endpoint];
   if (!collectionKey) return null;
   return dndData[collectionKey] || null;
+}
+
+// ─── Fuzzy search (Fuse.js, lazy indexes per endpoint) ──────────────────────
+
+const _fuseCache = {};
+
+function _getFuse(endpoint) {
+  if (_fuseCache[endpoint]) return _fuseCache[endpoint];
+  const col = getCollection(endpoint);
+  if (!col) return null;
+  _fuseCache[endpoint] = new Fuse(col, {
+    keys: ['name'],
+    threshold: 0.35,
+    includeScore: true,
+    minMatchCharLength: 3,
+  });
+  return _fuseCache[endpoint];
+}
+
+function fuzzySearchLocal(endpoint, query) {
+  if (!query || query.length < 3) return null;
+  const fuse = _getFuse(endpoint);
+  if (!fuse) return null;
+  const hits = fuse.search(query, { limit: 10 });
+  if (!hits.length) return null;
+  // Ties in score → prefer shortest name ("Vampire" over "Vampirate")
+  const best = hits.reduce((a, b) =>
+    Math.abs(a.score - b.score) < 0.01
+      ? (a.item.name.length <= b.item.name.length ? a : b)
+      : (a.score < b.score ? a : b)
+  );
+  return best.item;
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -280,12 +364,22 @@ function searchLocal(endpoint, query) {
   const lower = query.toLowerCase().trim();
   if (!lower) return { result: null, suggestions: [] };
 
-  // 1. Exact name match
-  const exact = col.find(e => e.name.toLowerCase() === lower);
-  if (exact) return { result: mapper(exact), suggestions: [] };
+  // 1. Exact name match — prefer canonical source (PHB/SRD over 3rd-party)
+  const exactMatches = col.filter(e => e.name.toLowerCase() === lower);
+  if (exactMatches.length > 0) {
+    exactMatches.sort((a, b) => _sourcePriority(a) - _sourcePriority(b));
+    return { result: mapper(exactMatches[0]), suggestions: [] };
+  }
 
-  // 2. Name contains query
-  const matches = col.filter(e => e.name.toLowerCase().includes(lower));
+  // 2. Name contains query — deduplicate by name, prefer canonical source
+  const allMatches = col.filter(e => e.name.toLowerCase().includes(lower));
+  const seen = new Set();
+  const matches = [];
+  for (const e of allMatches.sort((a, b) => _sourcePriority(a) - _sourcePriority(b))) {
+    const key = e.name.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); matches.push(e); }
+  }
+
   if (matches.length === 1) return { result: mapper(matches[0]), suggestions: [] };
   if (matches.length > 1)  return { result: null, suggestions: matches };
 
@@ -302,11 +396,28 @@ function fetchLocalSuggestions(endpoint, query) {
   if (!col) return null;
 
   const lower = query.toLowerCase().trim();
-  const pool  = lower
-    ? col.filter(e => e.name.toLowerCase().includes(lower))
-    : col;
+  const pool  = lower ? col.filter(e => e.name.toLowerCase().includes(lower)) : col;
 
-  return pool.slice(0, 25).map(e => ({ name: e.name, value: e.name }));
+  // Deduplicate by name, keeping canonical source
+  const seen = new Set();
+  const unique = [];
+  for (const e of pool.sort((a, b) => _sourcePriority(a) - _sourcePriority(b))) {
+    const key = e.name.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); unique.push(e); }
+  }
+
+  // Sort by relevance: exact → starts-with → contains, then alphabetical
+  if (lower) {
+    unique.sort((a, b) => {
+      const an = a.name.toLowerCase();
+      const bn = b.name.toLowerCase();
+      const aScore = an === lower ? 0 : an.startsWith(lower) ? 1 : 2;
+      const bScore = bn === lower ? 0 : bn.startsWith(lower) ? 1 : 2;
+      return aScore !== bScore ? aScore - bScore : a.name.localeCompare(b.name);
+    });
+  }
+
+  return unique.slice(0, 25).map(e => ({ name: e.name, value: e.name }));
 }
 
-module.exports = { hasLocalData, searchLocal, fetchLocalSuggestions };
+module.exports = { hasLocalData, searchLocal, fetchLocalSuggestions, fuzzySearchLocal };

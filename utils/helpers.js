@@ -1,120 +1,16 @@
 const fetch = require('node-fetch');
-const { hasLocalData, searchLocal, fetchLocalSuggestions } = require('./local-data');
+const { hasLocalData, searchLocal, fetchLocalSuggestions, fuzzySearchLocal } = require('./local-data');
+const TRANSLATIONS = require('./translations.json');
 
 const BASE_URL = 'https://api.open5e.com/v1';
 
-// Spanish→English lookup so users can query in their language
-const TRANSLATIONS = {
-  // Spells
-  'bola de fuego': 'fireball',
-  'muro de fuego': 'wall of fire',
-  'muro de llamas': 'wall of fire',
-  'bola de rayos': 'lightning bolt',
-  'rayo': 'lightning bolt',
-  'curar heridas': 'cure wounds',
-  'detectar magia': 'detect magic',
-  'misil magico': 'magic missile',
-  'misil mágico': 'magic missile',
-  'escudo': 'shield',
-  'dardo': 'magic missile',
-  'invisibilidad': 'invisibility',
-  'levitar': 'levitate',
-  'vuelo': 'fly',
-  'tinieblas': 'darkness',
-  'luz': 'light',
-  'oscuridad': 'darkness',
-  'armadura de mago': 'mage armor',
-  'imagen mayor': 'major image',
-  'contrahechizo': 'counterspell',
-  'desintegrar': 'disintegrate',
-  'teleportación': 'teleport',
-  'resurreccion': 'resurrection',
-  'resurrección': 'resurrection',
-  'revivir': 'revivify',
-  'revivificar': 'revivify',
-  'palabra de poder': 'power word kill',
-  'palabra de poder matar': 'power word kill',
-
-  // Monsters
-  'goblin': 'goblin',
-  'orco': 'orc',
-  'dragón rojo': 'ancient red dragon',
-  'dragon rojo': 'ancient red dragon',
-  'esqueleto': 'skeleton',
-  'zombi': 'zombie',
-  'zombie': 'zombie',
-  'troll': 'troll',
-  'ogro': 'ogre',
-  'vampiro': 'vampire',
-  'licántropo': 'werewolf',
-  'hombre lobo': 'werewolf',
-  'demonio': 'demon',
-  'diablo': 'devil',
-  'aboleth': 'aboleth',
-  'beholder': 'beholder',
-  'lich': 'lich',
-  'mente colmena': 'mind flayer',
-  'devorador de mentes': 'mind flayer',
-  'gárgola': 'gargoyle',
-  'gargola': 'gargoyle',
-
-  // Classes
-  'mago': 'wizard',
-  'brujo': 'warlock',
-  'hechicero': 'sorcerer',
-  'clerigo': 'cleric',
-  'clérigo': 'cleric',
-  'druida': 'druid',
-  'bardo': 'bard',
-  'paladin': 'paladin',
-  'paladín': 'paladin',
-  'explorador': 'ranger',
-  'montaraz': 'ranger',
-  'ladron': 'rogue',
-  'ladrón': 'rogue',
-  'picaro': 'rogue',
-  'pícaro': 'rogue',
-  'guerrero': 'fighter',
-  'barbaro': 'barbarian',
-  'bárbaro': 'barbarian',
-  'monje': 'monk',
-
-  // Races
-  'elfo': 'elf',
-  'enano': 'dwarf',
-  'humano': 'human',
-  'mediano': 'halfling',
-  'gnomo': 'gnome',
-  'semielfo': 'half-elf',
-  'semi-elfo': 'half-elf',
-  'semiorco': 'half-orc',
-  'semi-orco': 'half-orc',
-  'tiefling': 'tiefling',
-  'draconido': 'dragonborn',
-  'dracónido': 'dragonborn',
-
-  // Conditions
-  'cegado': 'blinded',
-  'hechizado': 'charmed',
-  'ensordecido': 'deafened',
-  'asustado': 'frightened',
-  'agarrado': 'grappled',
-  'incapacitado': 'incapacitated',
-  'paralizado': 'paralyzed',
-  'petrificado': 'petrified',
-  'envenenado': 'poisoned',
-  'tumbado': 'prone',
-  'postrado': 'prone',
-  'restringido': 'restrained',
-  'aturdido': 'stunned',
-  'inconsciente': 'unconscious',
-  'agotamiento': 'exhaustion',
-  'exhausto': 'exhaustion',
-};
+function stripAccents(str) {
+  return str.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
 
 function translate(input) {
-  const lower = input.toLowerCase().trim();
-  return TRANSLATIONS[lower] || lower;
+  const normalized = stripAccents(input.toLowerCase().trim());
+  return TRANSLATIONS[normalized] || normalized;
 }
 
 function truncate(text, max = 1024) {
@@ -149,7 +45,16 @@ async function searchWithSuggestions(endpoint, input, limit = 10) {
   const local = searchLocal(endpoint, translated);
   if (local.result || local.suggestions.length > 0) return local;
 
-  // 2. Fallback: Open5e API
+  // 2. Fuzzy match against local names (catches cognates, typos, untranslated Spanish)
+  if (hasLocalData(endpoint)) {
+    const fuzzyRaw = fuzzySearchLocal(endpoint, translated);
+    if (fuzzyRaw) {
+      const retried = searchLocal(endpoint, fuzzyRaw.name);
+      if (retried.result) return retried;
+    }
+  }
+
+  // 3. Fallback: Open5e API
   const slug = translated.replace(/ /g, '-');
 
   try {
@@ -173,10 +78,50 @@ async function searchWithSuggestions(endpoint, input, limit = 10) {
 
 async function generalSearch(query) {
   const translated = translate(query);
-  const res = await fetch(`${BASE_URL}/search/?text=${encodeURIComponent(translated)}&limit=8`);
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.results || [];
+  const lower = translated.toLowerCase();
+
+  // 1. Search local data across all covered endpoints
+  const localEndpoints = ['spells', 'monsters', 'magicitems', 'backgrounds', 'classes', 'races'];
+  const localMatches = [];
+
+  for (const endpoint of localEndpoints) {
+    const { result, suggestions } = searchLocal(endpoint, translated);
+    if (result) {
+      localMatches.push({ name: result.name, route: `v1/${endpoint}` });
+    } else {
+      for (const s of suggestions.slice(0, 4)) {
+        localMatches.push({ name: s.name, route: `v1/${endpoint}` });
+      }
+    }
+  }
+
+  // Sort: names that start with the query before names that just contain it
+  localMatches.sort((a, b) => {
+    const aStarts = a.name.toLowerCase().startsWith(lower);
+    const bStarts = b.name.toLowerCase().startsWith(lower);
+    if (aStarts && !bStarts) return -1;
+    if (!aStarts && bStarts) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  if (localMatches.length >= 8) return localMatches.slice(0, 8);
+
+  // 2. API fallback for endpoints not covered locally (conditions, weapons, armor, feats, sections)
+  try {
+    const res = await fetch(`${BASE_URL}/search/?text=${encodeURIComponent(translated)}&limit=8`);
+    if (res.ok) {
+      const data = await res.json();
+      const seen = new Set(localMatches.map(r => r.name.toLowerCase()));
+      for (const r of (data.results || [])) {
+        if (!seen.has(r.name.toLowerCase())) {
+          localMatches.push({ name: r.name, route: r.route });
+          if (localMatches.length >= 8) break;
+        }
+      }
+    }
+  } catch {}
+
+  return localMatches;
 }
 
 async function fetchSuggestions(endpoint, query) {

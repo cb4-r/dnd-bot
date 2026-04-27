@@ -77,6 +77,7 @@ npm start        — Iniciar el bot
 - [ ] Agregar más traducciones español→inglés en `TRANSLATIONS` según necesidad
 - [ ] Para clases/razas/trasfondos desde local: los campos estructurados (hit_dice, speed, skill_proficiencies) no están disponibles en dnd-data — solo se muestra la descripción en texto
 - [x] Implementar comando `/wildmagic`: tira 1d100 y muestra el efecto correspondiente de la tabla Oleada de Magia Salvaje. Datos embebidos en `commands/wildmagic.js`.
+- [ ] **`/rule` — secciones con listas de ítems discretos**: parsear y mostrar como campos inline en lugar de texto continuo. Caso concreto: "Actions in Combat" debería mostrar cada acción (Attack, Dash, Disengage, Dodge, Help, Hide, Ready, Search, Use an Object) como `**Nombre:** descripción breve` sin el texto narrativo. Aplicar al resto de secciones que sean listas (Conditions, Cover, Poisons, etc.) cuando sea viable.
 
 ---
 
