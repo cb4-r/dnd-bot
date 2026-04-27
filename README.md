@@ -1,144 +1,87 @@
 # ⚔️ DnD5e Compendium Bot
 
-A Discord bot for querying D&D 5e spells, monsters, magic items, classes, races, backgrounds, feats, conditions, weapons, armor, and rules — powered by the Open5e public API.
+Discord bot para consultar el compendio de D&D 5e. Soporta nombres en español e inglés, autocomplete en todos los comandos, y búsqueda difusa para tipeos y cognados.
 
 ---
 
-## Project Analysis
+## Comandos
 
-### Architecture
+| Comando | Ejemplo | Descripción |
+|---|---|---|
+| `/spell` | `/spell bola de fuego` | Hechizos |
+| `/monster` | `/monster vampiro` | Monstruos y criaturas |
+| `/item` | `/item bag of holding` | Objetos mágicos |
+| `/class` | `/class mago` | Clases con estadísticas |
+| `/race` | `/race elfo` | Razas con rasgos |
+| `/background` | `/background acolyte` | Trasfondos con habilidades y feature |
+| `/feat` | `/feat alert` | Dotes |
+| `/condition` | `/condition paralizado` | Condiciones |
+| `/weapon` | `/weapon longsword` | Armas |
+| `/armor` | `/armor plate` | Armaduras |
+| `/rule` | `/rule cover` | Reglas y mecánicas |
+| `/r` | `/r 2d6+3` | Lanzador de dados |
+| `/wildmagic` | `/wildmagic` | Tabla Oleada de Magia Salvaje |
+| `/search` | `/search fireball` | Búsqueda general |
+| `/help` | `/help` | Lista de comandos |
 
-The project is a single-process Discord bot with a modular command structure:
+**Soporte de español:** nombres en español funcionan en todos los comandos — `bola de fuego`, `vampiro`, `mago`, `paralizado`, etc. Los cognados y errores tipográficos también se resuelven automáticamente (`firaball → Fireball`, `vampiro → Vampire`).
 
-- **`index.js`** — entry point: loads commands dynamically, registers Discord event handlers
-- **`commands/`** — one file per slash command; each exports `data` (SlashCommandBuilder) and `execute(interaction)`
-- **`utils/helpers.js`** — Spanish→English translation dictionary, API search functions
-- **`utils/embeds.js`** — Discord embed builders, one per content type
-- **`deploy-commands.js`** — registers slash commands with Discord's API (run once)
+---
 
-Adding a new command only requires creating a file in `commands/` — no changes needed elsewhere.
+## Arquitectura
 
-### Data Source
+```
+index.js              — Entrada principal. Carga comandos, maneja slash + autocomplete
+deploy-commands.js    — Registra slash commands en Discord (correr una vez)
+commands/             — Un archivo por comando (15 comandos)
+utils/
+  helpers.js          — translate(), searchWithSuggestions(), fetchSuggestions(), generalSearch()
+  local-data.js       — Acceso a dnd-data: búsqueda local, fuzzy search (Fuse.js), parsers
+  embeds.js           — Constructores de Discord embeds por tipo de entidad
+  translations.json   — Diccionario español→inglés para términos no cognados
+.env                  — DISCORD_TOKEN, CLIENT_ID (no commitear)
+```
 
-All content is fetched live from the [Open5e API](https://api.open5e.com/v1), a free REST API that aggregates D&D 5e SRD content under Creative Commons licensing. There is no local database or cache.
+### Flujo de búsqueda
 
-**Available endpoints used:**
+Para cada consulta:
+1. **`translate()`** — strip acentos + lookup en `translations.json`
+2. **`searchLocal()`** — búsqueda exact/partial en datos locales (~30k registros, sin red)
+3. **`fuzzySearchLocal()`** — si local falla, Fuse.js busca por similitud de caracteres
+4. **Open5e API** — fallback para endpoints sin datos locales (conditions, weapons, armor, feats, rules)
 
-| Endpoint | Content |
+### Datos locales vs API
+
+| Fuente local (dnd-data) | Solo API (Open5e) |
 |---|---|
-| `/v1/spells/` | ~300 spells from the SRD |
-| `/v1/monsters/` | ~300+ monsters (SRD + Tome of Beasts, Creature Codex) |
-| `/v1/magicitems/` | SRD magic items |
-| `/v1/classes/` | 12 base classes with nested subclass lists |
-| `/v1/races/` | SRD races with nested subrace lists |
-| `/v1/backgrounds/` | SRD backgrounds |
-| `/v1/feats/` | SRD feats |
-| `/v1/conditions/` | All 15 conditions |
-| `/v1/weapons/` | SRD weapons |
-| `/v1/armor/` | SRD armor |
-| `/v1/sections/` | Rules and mechanics (cover, grappling, etc.) |
-| `/v1/search/` | Cross-endpoint full-text search |
+| Hechizos (~5,849) | Conditions |
+| Monstruos (~11,463) | Weapons |
+| Objetos mágicos (~15,749) | Armor |
+| Trasfondos (~405) | Feats |
+| Clases (~134) | Rules/Sections |
+| Razas/Especies (~383) | |
 
-**Content limitation:** Only SRD and OGL-licensed content is available. Books like Xanathar's Guide, Tasha's Cauldron of Everything, and Mordenkainen's are not included, as that content is not freely redistributable.
-
-### Current State
-
-| Area | Status |
-|---|---|
-| Commands | 13 slash commands implemented |
-| Spanish translation | ~90 terms mapped (spells, monsters, classes, races, conditions) |
-| Subclasses | Listed inline within `/class` |
-| Subraces | Listed inline within `/race` |
-| Error handling | Basic — catches API errors, no retry logic |
-| Caching | None — every query hits the API live |
-| Autocomplete | Not implemented |
-| Database | None |
-| Tests | None |
-
-### Known Limitations
-
-- **No cache:** high latency on every query; bot fails silently if Open5e is down
-- **No autocomplete:** users must type exact or near-exact names
-- **No interactive results:** `/search` returns a list but offers no click-through to details
-- **Translation coverage is partial:** terms not in the dictionary fall back to a raw English search, which may or may not find a match
+Los datos locales tienen **source priority**: Player's Handbook > SRD > Free Basic Rules > suplementos de terceros.
 
 ---
 
 ## Setup
 
-### Requirements
+### Requisitos
 
-- Node.js 18+ → https://nodejs.org
-- A Discord bot application → https://discord.com/developers/applications
+- Node.js 18+
+- Bot de Discord → https://discord.com/developers/applications
 
-### Installation
+### Instalación
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Configure credentials
-cp .env.example .env
-# Edit .env with your DISCORD_TOKEN and CLIENT_ID
-
-# 3. Register slash commands with Discord (run once, or after adding new commands)
-npm run deploy
-
-# 4. Start the bot
+cp .env.example .env   # editar con DISCORD_TOKEN y CLIENT_ID
+npm run deploy         # registrar slash commands (una vez, o al agregar comandos)
 npm start
 ```
 
----
-
-## Commands
-
-| Command | Example | Description |
-|---|---|---|
-| `/spell` | `/spell fireball` | Look up a spell |
-| `/monster` | `/monster goblin` | Look up a monster |
-| `/item` | `/item vorpal sword` | Look up a magic item |
-| `/class` | `/class wizard` | Class info + subclass list |
-| `/race` | `/race elf` | Race info + subrace list |
-| `/background` | `/background acolyte` | Background info |
-| `/feat` | `/feat alert` | Look up a feat |
-| `/condition` | `/condition poisoned` | Look up a condition |
-| `/weapon` | `/weapon longsword` | Look up a weapon |
-| `/armor` | `/armor plate` | Look up armor |
-| `/rule` | `/rule grappling` | Look up a rule or mechanic |
-| `/search` | `/search fireball` | General search across all content |
-| `/help` | `/help` | List all commands |
-
-Spanish names are supported for common terms (e.g. `bola de fuego`, `vampiro`, `mago`, `paralizado`).
-
----
-
-## Project Structure
-
-```
-dnd-bot/
-├── commands/           # One file per slash command
-│   ├── spell.js
-│   ├── monster.js
-│   ├── item.js
-│   ├── class.js
-│   ├── race.js
-│   ├── background.js
-│   ├── feat.js
-│   ├── condition.js
-│   ├── weapon.js
-│   ├── armor.js
-│   ├── rule.js
-│   ├── search.js
-│   └── help.js
-├── utils/
-│   ├── helpers.js      # ES→EN translations, API search logic
-│   └── embeds.js       # Discord embed builders
-├── index.js            # Bot entry point
-├── deploy-commands.js  # Registers commands with Discord
-└── .env.example
-```
-
-## Keeping the Bot Online (optional)
+### Mantener el bot activo (opcional)
 
 ```bash
 npm install -g pm2
@@ -146,8 +89,15 @@ pm2 start index.js --name dnd-bot
 pm2 startup && pm2 save
 ```
 
-Or deploy for free on Railway or Render.
+---
+
+## Variables de entorno
+
+```
+DISCORD_TOKEN=...
+CLIENT_ID=1494907913590800545
+```
 
 ---
 
-*Data provided by [Open5e API](https://open5e.com) — content licensed under Creative Commons (SRD 5e)*
+*Datos: [dnd-data](https://www.npmjs.com/package/dnd-data) (local) + [Open5e API](https://open5e.com) (fallback) — contenido bajo SRD 5e / Creative Commons*

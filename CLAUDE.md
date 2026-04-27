@@ -83,6 +83,15 @@ npm start        — Iniciar el bot
 
 ## Historial de Cambios
 
+### [2026-04-27] — Refactoring general + optimización de embeds y búsqueda
+- **Búsqueda:** `TRANSLATIONS` dict → `utils/translations.json` + `stripAccents()`. Eliminados ~20 duplicados por acentos.
+- **Fuzzy search:** Fuse.js sobre datos locales. Cognados (`vampiro→Vampire`) y typos (`firaball→Fireball`) sin entrada en dict. Tie-breaking por nombre más corto evita falsos positivos.
+- **Autocomplete:** deduplicación por nombre + orden exact→starts-with→contains + source priority (PHB > SRD > terceros).
+- **Embeds:** `/class` agrega `prof_weapons`, corrige sangrado de `prof_skills`; `/race` elimina lore; `/background` parser extrae skills/langs/tools/feature; `/feat` omite desc cuando hay `effects_desc`; `/item` strip header redundante; `/rule` `_skipLoreIntros()` salta hasta 5 párrafos narrativos.
+- **Comandos:** todos usan `searchWithSuggestions` con "Did you mean?" — antes solo `/spell` lo tenía. `searchEndpoint` eliminado.
+- **`/help`:** agregados `/r` y `/wildmagic`.
+- **README:** reescrito para reflejar estado actual (15 comandos, datos locales, arquitectura híbrida).
+
 ### [2026-04-22] — Inicialización y setup
 - Archivo `CLAUDE.md` creado con estructura base y política de rotación.
 - Instalación de dependencias (`npm install` — faltaba `dotenv`).

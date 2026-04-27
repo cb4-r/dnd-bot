@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { searchEndpoint } = require('../utils/helpers');
+const { searchWithSuggestions } = require('../utils/helpers');
 const { embedArmor } = require('../utils/embeds');
 
 module.exports = {
@@ -11,8 +11,15 @@ module.exports = {
 
   async execute(interaction) {
     const name = interaction.options.getString('name');
-    const armor = await searchEndpoint('armor', name);
-    if (!armor) return interaction.editReply(`❌ Armor **"${name}"** not found.`);
-    return interaction.editReply({ embeds: [embedArmor(armor)] });
+    const { result, suggestions } = await searchWithSuggestions('armor', name);
+
+    if (result) return interaction.editReply({ embeds: [embedArmor(result)] });
+
+    if (suggestions.length > 0) {
+      const list = suggestions.slice(0, 8).map(s => `• **${s.name}**`).join('\n');
+      return interaction.editReply(`❌ No exact match for **"${name}"**. Did you mean:\n${list}`);
+    }
+
+    return interaction.editReply(`❌ Armor **"${name}"** not found.`);
   },
 };

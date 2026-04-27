@@ -33,11 +33,6 @@ function formatSpeed(speed) {
   return String(speed);
 }
 
-async function searchEndpoint(endpoint, input) {
-  const { result } = await searchWithSuggestions(endpoint, input);
-  return result;
-}
-
 async function searchWithSuggestions(endpoint, input, limit = 10) {
   const translated = translate(input);
 
@@ -153,4 +148,4 @@ async function fetchSuggestions(endpoint, query) {
   }
 }
 
-module.exports = { translate, truncate, titleCase, formatSpeed, searchEndpoint, searchWithSuggestions, fetchSuggestions, generalSearch };
+module.exports = { translate, truncate, titleCase, formatSpeed, searchWithSuggestions, fetchSuggestions, generalSearch };
