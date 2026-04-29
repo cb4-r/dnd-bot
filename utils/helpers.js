@@ -55,20 +55,27 @@ async function searchWithSuggestions(endpoint, input, limit = 10) {
   try {
     const res = await fetch(`${BASE_URL}/${endpoint}/${slug}/`);
     if (res.ok) return { result: await res.json(), suggestions: [] };
-  } catch {}
+  } catch (err) {
+    console.error(`[searchWithSuggestions] slug fetch failed (${endpoint}/${slug}):`, err.message);
+  }
 
-  const res = await fetch(`${BASE_URL}/${endpoint}/?search=${encodeURIComponent(translated)}&limit=${limit}`);
-  if (!res.ok) return { result: null, suggestions: [] };
-  const data = await res.json();
-  const results = data.results || [];
-  if (results.length === 0) return { result: null, suggestions: [] };
+  try {
+    const res = await fetch(`${BASE_URL}/${endpoint}/?search=${encodeURIComponent(translated)}&limit=${limit}`);
+    if (!res.ok) return { result: null, suggestions: [] };
+    const data = await res.json();
+    const results = data.results || [];
+    if (results.length === 0) return { result: null, suggestions: [] };
 
-  const lower = translated.toLowerCase();
-  const nameMatches = results.filter(r => r.name.toLowerCase().includes(lower));
+    const lower = translated.toLowerCase();
+    const nameMatches = results.filter(r => r.name.toLowerCase().includes(lower));
 
-  if (nameMatches.length === 1) return { result: nameMatches[0], suggestions: [] };
-  if (nameMatches.length > 1)  return { result: null, suggestions: nameMatches };
-  return { result: null, suggestions: results };
+    if (nameMatches.length === 1) return { result: nameMatches[0], suggestions: [] };
+    if (nameMatches.length > 1)  return { result: null, suggestions: nameMatches };
+    return { result: null, suggestions: results };
+  } catch (err) {
+    console.error(`[searchWithSuggestions] search fetch failed (${endpoint}):`, err.message);
+    return { result: null, suggestions: [] };
+  }
 }
 
 async function generalSearch(query) {
@@ -114,7 +121,9 @@ async function generalSearch(query) {
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('[generalSearch] API fallback failed:', err.message);
+  }
 
   return localMatches;
 }

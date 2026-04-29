@@ -25,11 +25,13 @@
 ```
 index.js              — Entrada principal. Carga comandos, maneja interacciones (slash + autocomplete)
 deploy-commands.js    — Script one-shot para registrar slash commands en Discord
+clear-commands.js     — Utility de mantenimiento: elimina todos los slash commands (PUT vacío a Discord API)
 commands/             — Un archivo por comando: spell, monster, race, class, feat, item,
-                        weapon, armor, background, condition, rule, search, help
-utils/helpers.js      — Lógica de búsqueda híbrida: intenta local-data primero, luego Open5e API
-utils/local-data.js   — Datos locales vía dnd-data: mappers, searchLocal(), fetchLocalSuggestions()
+                        weapon, armor, background, condition, rule, search, help, r, wildmagic
+utils/helpers.js      — translate(), búsqueda híbrida (local→fuzzy→API), fetchSuggestions()
+utils/local-data.js   — Datos locales vía dnd-data: mappers, Fuse.js (pre-built), parsers
 utils/embeds.js       — Constructores de embeds de Discord para cada tipo de entidad
+utils/translations.json — Diccionario español→inglés para términos no cognados
 .env                  — Variables de entorno (no commitear): DISCORD_TOKEN, CLIENT_ID
 ```
 
@@ -74,10 +76,10 @@ npm start        — Iniciar el bot
 
 ## Tareas Pendientes
 
-- [ ] Agregar más traducciones español→inglés en `TRANSLATIONS` según necesidad
+- [ ] Agregar más traducciones español→inglés en `translations.json` según necesidad
 - [ ] Para clases/razas/trasfondos desde local: los campos estructurados (hit_dice, speed, skill_proficiencies) no están disponibles en dnd-data — solo se muestra la descripción en texto
-- [x] Implementar comando `/wildmagic`: tira 1d100 y muestra el efecto correspondiente de la tabla Oleada de Magia Salvaje. Datos embebidos en `commands/wildmagic.js`.
-- [ ] **`/rule` — secciones con listas de ítems discretos**: parsear y mostrar como campos inline en lugar de texto continuo. Caso concreto: "Actions in Combat" debería mostrar cada acción (Attack, Dash, Disengage, Dodge, Help, Hide, Ready, Search, Use an Object) como `**Nombre:** descripción breve` sin el texto narrativo. Aplicar al resto de secciones que sean listas (Conditions, Cover, Poisons, etc.) cuando sea viable.
+- [ ] **Deduplicar comandos**: los 11 comandos de contenido son ~95% idénticos. Factory `createGenericCommand(name, desc, endpoint, embedFn)` para reducirlos a 3 líneas cada uno.
+- [ ] **`/condition` — bullets como fields** (opcional, baja prioridad): el endpoint devuelve `* texto` que Discord renderiza bien, pero podría mejorarse como fields separados igual que `/rule`.
 
 ---
 
@@ -116,6 +118,25 @@ npm start        — Iniciar el bot
 - Revisadas dos imágenes (`image copy 2.png`, `image copy 3.png`) que contenían la tabla completa de Oleada de Magia Salvaje dividida en dos partes.
 - Transcriptas y combinadas en `oleada-magia-salvaje.md`: 50 entradas (d100 01-02 a 99-00) en una sola tabla Markdown.
 - El archivo es la fuente de datos para el futuro comando `/wildmagic` (ver Tareas Pendientes). No requiere API externa.
+
+### [2026-04-29] — Parseo de secciones-lista en /rule
+- **`tryParseListSection()`** agregada en embeds.js: detecta secciones estructuradas (headings `##`/`###` + contenido, o `**_Name_**.` en línea propia) y las renderiza como campos del embed con descripción breve por ítem.
+- **Fix colateral**: `armor.ac_string || String(armor.base_ac) ?? '—'` corregido a `(armor.ac_string || String(armor.base_ac)) ?? '—'` (error de sintaxis JS por mezclar `||` y `??`).
+- Secciones verificadas contra API real: Actions in Combat (10 items → 8 mostrados), Conditions (12+ → 8), Poisons (4 tipos), Cover y Feats (prosa, sin cambio).
+
+### [2026-04-29] — Bugfixes + mejoras de robustez + sincronización de docs
+- **spell.js:** condición `suggestions.length === 0` corregida a `> 0` para coincidir con los otros 10 comandos.
+- **helpers.js:** 2 catch vacíos reemplazados por `console.error`; línea de fetch desprotegida wrapeada en su propio try/catch con retorno seguro.
+- **local-data.js:** índices Fuse.js movidos de lazy (primer query) a eager (carga del módulo); regex `TRAIT_RE` promovida a constante de módulo con reset de `lastIndex`.
+- **embeds.js:** todos los `|| '—'` y `|| 'SRD 5e'` cambiados a `??` (nullish coalescing); speed chain envuelta en paréntesis para evitar error de sintaxis JS.
+- **Documentación:** README (Node.js 18+ → 24), INICIO.md (descripción de helpers.js, local-data.js y clear-commands.js agregados), CLAUDE.md (estructura actualizada con clear-commands.js y translations.json), TO_DO reorganizado con sección "Resuelto".
+
+### [2026-04-27] — Refactoring final + análisis de deuda técnica
+- **weapon.js:** migrado de `searchEndpoint` a `searchWithSuggestions` con "Did you mean?" (último comando pendiente).
+- **`searchEndpoint` eliminado** de `helpers.js`; ningún archivo lo referencia ya.
+- **Commit y push** de todos los cambios acumulados de la sesión de refactoring.
+- **Análisis de deuda técnica:** 9 issues identificados (silent errors, comandos duplicados, Fuse.js lazy build, bug en spell.js, parseo /rule, `||` vs `??`, regex recompilada).
+- **`TO_DO`** creado en raíz del proyecto con todos los issues priorizados.
 
 ### [2026-04-24] — Comando /wildmagic + scripts de inicio
 - Creado `commands/wildmagic.js`: tira 1d100, mapea al rango de la tabla con `Math.floor((roll-1)/2)`, y devuelve un embed con el resultado y el efecto. Los 50 efectos van embebidos directamente en el archivo.

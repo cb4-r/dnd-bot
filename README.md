@@ -69,7 +69,7 @@ Los datos locales tienen **source priority**: Player's Handbook > SRD > Free Bas
 
 ### Requisitos
 
-- Node.js 18+
+- Node.js 24
 - Bot de Discord → https://discord.com/developers/applications
 
 ### Instalación

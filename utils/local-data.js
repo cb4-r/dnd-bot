@@ -47,6 +47,8 @@ function buildActionDesc(a) {
 
 // ─── Description parsers ────────────────────────────────────────────────────
 
+const TRAIT_RE = /\b([A-Z][a-z']+(?:\s+[A-Z][a-z']+){0,3})\s*[.:]\s*(?=[A-Z])/g;
+
 function grab(desc, pattern) {
   const m = desc.match(pattern);
   return m ? m[1].trim() : null;
@@ -78,10 +80,9 @@ function parseRaceDesc(desc) {
   if (traitsStart !== -1) {
     const traitsBlock = d.slice(traitsStart);
     const names = [];
-    // Only match fully title-cased phrases (every word starts with capital)
-    const re = /\b([A-Z][a-z’]+(?:\s+[A-Z][a-z’]+){0,3})\s*[.:]\s*(?=[A-Z])/g;
+    TRAIT_RE.lastIndex = 0;
     let match;
-    while ((match = re.exec(traitsBlock)) !== null) {
+    while ((match = TRAIT_RE.exec(traitsBlock)) !== null) {
       const name = match[1].trim();
       if (SKIP_TRAIT_LABELS.has(name)) continue;
       if (/^(You|Your|The|This|An|A|It|In|If|When)\b/.test(name)) continue;
@@ -310,21 +311,23 @@ function getCollection(endpoint) {
   return dndData[collectionKey] || null;
 }
 
-// ─── Fuzzy search (Fuse.js, lazy indexes per endpoint) ──────────────────────
+// ─── Fuzzy search (Fuse.js, indexes built at module load) ───────────────────
+
+const FUSE_OPTIONS = {
+  keys: ['name'],
+  threshold: 0.35,
+  includeScore: true,
+  minMatchCharLength: 3,
+};
 
 const _fuseCache = {};
+for (const _ep of Object.keys(ENDPOINT_MAP)) {
+  const _col = getCollection(_ep);
+  if (_col) _fuseCache[_ep] = new Fuse(_col, FUSE_OPTIONS);
+}
 
 function _getFuse(endpoint) {
-  if (_fuseCache[endpoint]) return _fuseCache[endpoint];
-  const col = getCollection(endpoint);
-  if (!col) return null;
-  _fuseCache[endpoint] = new Fuse(col, {
-    keys: ['name'],
-    threshold: 0.35,
-    includeScore: true,
-    minMatchCharLength: 3,
-  });
-  return _fuseCache[endpoint];
+  return _fuseCache[endpoint] || null;
 }
 
 function fuzzySearchLocal(endpoint, query) {

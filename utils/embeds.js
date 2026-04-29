@@ -16,7 +16,7 @@ function _skipLoreIntros(desc) {
 }
 
 const sourceLabel = e => e._source === 'local' ? 'Local' : 'Open5e API';
-const footer      = e => `Source: ${e.document__title || 'SRD 5e'} • ${sourceLabel(e)}`;
+const footer      = e => `Source: ${e.document__title ?? 'SRD 5e'} • ${sourceLabel(e)}`;
 
 function embedSpell(spell) {
   const level = spell.level_int === 0 ? 'Cantrip' : `Level ${spell.level_int}`;
@@ -26,11 +26,11 @@ function embedSpell(spell) {
     .setDescription(truncate(spell.desc, 400))
     .addFields(
       { name: 'Level', value: level, inline: true },
-      { name: 'School', value: spell.school || '—', inline: true },
-      { name: 'Casting Time', value: spell.casting_time || '—', inline: true },
-      { name: 'Range', value: spell.range || '—', inline: true },
-      { name: 'Duration', value: spell.duration || '—', inline: true },
-      { name: 'Components', value: spell.components || '—', inline: true },
+      { name: 'School', value: spell.school ?? '—', inline: true },
+      { name: 'Casting Time', value: spell.casting_time ?? '—', inline: true },
+      { name: 'Range', value: spell.range ?? '—', inline: true },
+      { name: 'Duration', value: spell.duration ?? '—', inline: true },
+      { name: 'Components', value: spell.components ?? '—', inline: true },
     );
   if (spell.higher_level) embed.addFields({ name: '📈 At Higher Levels', value: truncate(spell.higher_level, 512) });
   if (spell.concentration === 'yes') embed.addFields({ name: '⚠️', value: 'Requires concentration', inline: true });
@@ -46,7 +46,7 @@ function embedMonster(monster) {
     .addFields(
       { name: '❤️ Hit Points', value: `${monster.hit_points} (${monster.hit_dice})`, inline: true },
       { name: '🛡️ Armor Class', value: String(monster.armor_class), inline: true },
-      { name: '💨 Speed', value: monster.speed || '—', inline: true },
+      { name: '💨 Speed', value: monster.speed ?? '—', inline: true },
       { name: '💪 STR', value: String(monster.strength), inline: true },
       { name: '🤸 DEX', value: String(monster.dexterity), inline: true },
       { name: '🏋️ CON', value: String(monster.constitution), inline: true },
@@ -82,8 +82,8 @@ function embedItem(item) {
     .setColor(0xF39C12)
     .setDescription(truncate(desc, 700))
     .addFields(
-      { name: 'Type',   value: item.type   || '—', inline: true },
-      { name: 'Rarity', value: item.rarity || '—', inline: true },
+      { name: 'Type',   value: item.type   ?? '—', inline: true },
+      { name: 'Rarity', value: item.rarity ?? '—', inline: true },
     );
   if (item.requires_attunement) embed.addFields({ name: '🔗 Attunement', value: item.requires_attunement, inline: true });
   embed.setFooter({ text: footer(item) });
@@ -96,8 +96,8 @@ function embedClass(cls) {
     .setColor(0x27AE60)
     .addFields(
       { name: '🎲 Hit Die',        value: cls.hit_dice ? `d${cls.hit_dice}` : '—',            inline: true },
-      { name: '🛡️ Saving Throws',  value: cls.saving_throws || '—',                            inline: true },
-      { name: '🧥 Armor',          value: cls.prof_armor    || '—',                            inline: true },
+      { name: '🛡️ Saving Throws',  value: cls.saving_throws ?? '—',                            inline: true },
+      { name: '🧥 Armor',          value: cls.prof_armor    ?? '—',                            inline: true },
     );
   if (cls.prof_weapons) {
     embed.addFields({ name: '⚔️ Weapons', value: cls.prof_weapons });
@@ -120,9 +120,9 @@ function embedRace(race) {
     .setTitle(`🧝 ${race.name}`)
     .setColor(0x2980B9)
     .addFields(
-      { name: '🏃 Speed',     value: race.speed_desc || formatSpeed(race.speed) || '—', inline: true },
-      { name: '📏 Size',      value: race.size       || '—',                             inline: true },
-      { name: '🌐 Languages', value: race.languages  || '—',                             inline: true },
+      { name: '🏃 Speed',     value: (race.speed_desc || formatSpeed(race.speed)) ?? '—', inline: true },
+      { name: '📏 Size',      value: race.size       ?? '—',                             inline: true },
+      { name: '🌐 Languages', value: race.languages  ?? '—',                             inline: true },
     );
   if (race.asi)    embed.addFields({ name: '⬆️ Ability Score Increase', value: truncate(race.asi, 300) });
   if (race.traits) embed.addFields({ name: '✨ Racial Traits', value: truncate(race.traits, 500) });
@@ -141,12 +141,12 @@ function embedBackground(bg) {
 
   if (hasParsed) {
     embed.addFields(
-      { name: '🛠️ Skills',    value: bg.skill_proficiencies || '—', inline: true },
-      { name: '🌐 Languages', value: bg.languages           || '—', inline: true },
+      { name: '🛠️ Skills',    value: bg.skill_proficiencies ?? '—', inline: true },
+      { name: '🌐 Languages', value: bg.languages           ?? '—', inline: true },
     );
     if (bg.tools) embed.addFields({ name: '🔧 Tools', value: bg.tools, inline: true });
     if (bg.feature) {
-      embed.addFields({ name: `✨ Feature: ${bg.feature}`, value: truncate(bg.feature_desc || '—', 300) });
+      embed.addFields({ name: `✨ Feature: ${bg.feature}`, value: truncate(bg.feature_desc ?? '—', 300) });
     }
   } else {
     // Parsing yielded nothing — fall back to raw description
@@ -189,10 +189,10 @@ function embedWeapon(weapon) {
     .setTitle(`🗡️ ${weapon.name}`)
     .setColor(0xC0392B)
     .addFields(
-      { name: 'Category', value: weapon.category || '—', inline: true },
+      { name: 'Category', value: weapon.category ?? '—', inline: true },
       { name: 'Damage', value: damage, inline: true },
-      { name: 'Cost', value: weapon.cost || '—', inline: true },
-      { name: 'Weight', value: weapon.weight || '—', inline: true },
+      { name: 'Cost', value: weapon.cost ?? '—', inline: true },
+      { name: 'Weight', value: weapon.weight ?? '—', inline: true },
     );
   if (weapon.properties?.length) {
     embed.addFields({ name: '⚙️ Properties', value: weapon.properties.join(', ') });
@@ -206,10 +206,10 @@ function embedArmor(armor) {
     .setTitle(`🛡️ ${armor.name}`)
     .setColor(0x7F8C8D)
     .addFields(
-      { name: 'Category', value: armor.category || '—', inline: true },
-      { name: 'AC', value: armor.ac_string || String(armor.base_ac) || '—', inline: true },
-      { name: 'Cost', value: armor.cost || '—', inline: true },
-      { name: 'Weight', value: armor.weight || '—', inline: true },
+      { name: 'Category', value: armor.category ?? '—', inline: true },
+      { name: 'AC', value: (armor.ac_string || String(armor.base_ac)) ?? '—', inline: true },
+      { name: 'Cost', value: armor.cost ?? '—', inline: true },
+      { name: 'Weight', value: armor.weight ?? '—', inline: true },
     );
   if (armor.strength_requirement) {
     embed.addFields({ name: '💪 Strength Required', value: String(armor.strength_requirement), inline: true });
@@ -221,12 +221,92 @@ function embedArmor(armor) {
   return embed;
 }
 
+function tryParseListSection(text) {
+  if (!text) return null;
+
+  // Pattern 1: heading-based list (## or ### Name followed by content)
+  // Try deepest level first so "### Attack" wins over "## Types of Actions"
+  const paras = text.split(/\n\n+/);
+  for (let level = 4; level >= 2; level--) {
+    const hRe = new RegExp(`^#{${level}}\\s+(.+)`);
+    const items = [];
+    let intro = null;
+    let inIntro = true;
+
+    for (let i = 0; i < paras.length; i++) {
+      const p  = paras[i].trim();
+      const hm = p.match(hRe);
+      if (hm) {
+        inIntro = false;
+        const next = paras[i + 1]?.trim() || '';
+        if (next && !/^#+/.test(next)) {
+          let desc;
+          if (/^[*\-•]/.test(next)) {
+            // Bullet list: first bullet text
+            desc = next.match(/^[*\-•]\s+([^\n]+)/)?.[1]?.trim() ?? next.slice(0, 200);
+          } else {
+            // Paragraph: first sentence
+            const flat = next.replace(/\s+/g, ' ');
+            desc = (flat.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? flat).slice(0, 200);
+          }
+          items.push({ name: hm[1].trim(), desc: desc.trim() });
+          i++;
+        } else {
+          items.push({ name: hm[1].trim(), desc: '—' });
+        }
+      } else if (inIntro && !/^#+/.test(p)) {
+        if (!intro) intro = p.slice(0, 300);
+      }
+    }
+
+    if (items.length >= 3) return { intro: intro || null, items };
+  }
+
+  // Pattern 2: **_Name_**. Description at line start (Poisons-style)
+  const BI_RE = /^\*\*_([^_\n]+?)_?\*\*[.,:]?\s+(.+)/gm;
+  const items2 = [];
+  let firstIdx = -1;
+  for (const m of text.matchAll(BI_RE)) {
+    if (firstIdx === -1) firstIdx = m.index;
+    const name = m[1].trim().replace(/\.$/, '');
+    const raw  = m[2].replace(/\s+/g, ' ').trim();
+    const desc = (raw.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? raw).slice(0, 200).trim();
+    items2.push({ name, desc });
+  }
+  if (items2.length >= 3) {
+    const intro = firstIdx > 0
+      ? text.slice(0, firstIdx).replace(/^#+\s[^\n]*/gm, '').trim().slice(0, 300) || null
+      : null;
+    return { intro, items: items2 };
+  }
+
+  return null;
+}
+
 function embedRule(section) {
-  const desc = _skipLoreIntros(section.desc || '');
+  const raw    = section.desc || '';
+  const desc   = _skipLoreIntros(raw);
+  const parsed = tryParseListSection(desc);
+
   const embed = new EmbedBuilder()
     .setTitle(`📖 ${section.name}`)
-    .setColor(0x34495E)
-    .setDescription(truncate(desc, 1200));
+    .setColor(0x34495E);
+
+  if (parsed) {
+    const shown = parsed.items.slice(0, 8);
+    const extra = parsed.items.length - shown.length;
+    const introLines = [
+      parsed.intro,
+      extra > 0 ? `*Showing ${shown.length} of ${parsed.items.length}.*` : null,
+    ].filter(Boolean).join('\n\n');
+    if (introLines) embed.setDescription(introLines);
+    for (const item of shown) {
+      embed.addFields({ name: item.name, value: item.desc || '—' });
+    }
+  } else {
+    embed.setDescription(truncate(desc, 1200));
+  }
+
   if (section.parent) embed.addFields({ name: '📂 Chapter', value: section.parent, inline: true });
   embed.setFooter({ text: footer(section) });
   return embed;

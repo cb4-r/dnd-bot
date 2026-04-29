@@ -1,0 +1,41 @@
+# TO_DO — dnd5e-compendio-bot
+
+---
+
+## Alto
+
+*(sin items pendientes de alta prioridad)*
+
+---
+
+## Medio
+
+- [ ] **Deduplicar comandos** (commands/*.js — 11 archivos)
+  Los 11 comandos de contenido son ~95% idénticos; solo cambian el endpoint y la
+  función embed. Extraer una factory `createGenericCommand(name, desc, endpoint, embedFn)`
+  que construya el SlashCommandBuilder y el execute, y reemplazar cada archivo con
+  3 líneas. Requiere refactor de index.js si los archivos desaparecen o se consolidan.
+
+---
+
+## Bajo
+
+- [ ] **Más traducciones español→inglés** (utils/translations.json)
+  Agregar según se detecten búsquedas fallidas en uso real del bot.
+
+- [ ] **`/condition` — bullets como fields** (opcional)
+  El endpoint `/conditions/` devuelve bullets markdown (`* texto`). Discord los
+  renderiza correctamente como lista, así que no es urgente. Si se quiere mejorar,
+  parsear cada `* ` como un field separado en el embed (mismo patrón que /rule).
+
+---
+
+## Resuelto (2026-04-29)
+
+- [x] **Silent errors en helpers.js** — `console.error` en los 2 catch vacíos; línea 60 wrapeada en try/catch propio.
+- [x] **Bug en spell.js:18** — condición invertida corregida para coincidir con los otros 10 comandos.
+- [x] **Pre-build de índices Fuse.js** — índices construidos al cargar el módulo, no lazy.
+- [x] **`||` → `??` en embeds.js** — todos los campos opcionales usan nullish coalescing.
+- [x] **Regex de módulo en parseRaceDesc()** — `TRAIT_RE` movido a constante de módulo; reset de `lastIndex` antes de cada uso.
+- [x] **Actualizar /help** — verificado: los 15 comandos están listados correctamente.
+- [x] **Parseo de secciones-lista en /rule** — `tryParseListSection()` en embeds.js detecta headings `##`/`###` y formato `**_Name_**.`. Actions in Combat, Conditions (section), Poisons → fields estructurados. Cover y Feats (prosa pura) → texto, correcto dado su formato en la API.

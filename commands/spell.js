@@ -15,10 +15,11 @@ module.exports = {
 
     if (result) return interaction.editReply({ embeds: [embedSpell(result)] });
 
-    if (suggestions.length === 0)
-      return interaction.editReply(`❌ Spell **"${name}"** not found. Try the English name if it's not in the dictionary.`);
+    if (suggestions.length > 0) {
+      const list = suggestions.slice(0, 8).map(s => `• **${s.name}**`).join('\n');
+      return interaction.editReply(`❌ No exact match for **"${name}"**. Did you mean:\n${list}`);
+    }
 
-    const list = suggestions.slice(0, 8).map(s => `• **${s.name}**`).join('\n');
-    return interaction.editReply(`❌ No exact match for **"${name}"**. Did you mean:\n${list}`);
+    return interaction.editReply(`❌ Spell **"${name}"** not found. Try the English name if it's not in the dictionary.`);
   },
 };
