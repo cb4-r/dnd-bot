@@ -125,7 +125,7 @@ function embedMonster(monster) {
   ].filter(Boolean).join('\n');
 
   const embed = new EmbedBuilder()
-    .setTitle(`🐉 ${monster.name}`)
+    .setTitle(monster.name)
     .setColor(0xC0392B)
     .setDescription(descLines);
 
