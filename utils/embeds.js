@@ -144,10 +144,6 @@ function embedMonster(monster) {
       .map(a => `**${a.name}:** ${truncate(a.desc, 150)}`).join('\n');
     embed.addFields({ name: 'Actions', value });
   }
-  if (monster.desc) {
-    embed.addFields({ name: 'Description', value: truncate(monster.desc, 1024) });
-  }
-
   embed.setFooter({ text: footer(monster) });
   return embed;
 }

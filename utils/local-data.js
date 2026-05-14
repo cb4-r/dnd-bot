@@ -173,6 +173,56 @@ function mapSpell(raw) {
   };
 }
 
+// Names are short title-cased phrases (all words capitalized, max 7 words).
+// "and"/"or"/"of" are allowed as connectors.
+function _isAbilityName(s) {
+  const words = s.trim().split(/\s+/);
+  if (words.length > 7) return false;
+  const CONNECTORS = new Set(['and', 'or', 'of']);
+  return words.every(w => /^[A-Z]/.test(w) || CONNECTORS.has(w.toLowerCase()));
+}
+
+// Parse a flat text block like "Name. Desc sentence. Name2. Desc2."
+// into [{name, desc}] pairs.
+function _parseDndAbilities(text) {
+  const parts = text.trim().split(/\.\s+/);
+  const abilities = [];
+  let i = 0;
+  while (i < parts.length) {
+    if (parts[i] && _isAbilityName(parts[i])) {
+      const name = parts[i].trim();
+      const descParts = [];
+      i++;
+      while (i < parts.length && !_isAbilityName(parts[i])) {
+        descParts.push(parts[i].trim());
+        i++;
+      }
+      if (descParts.length) {
+        const d = descParts.join('. ');
+        abilities.push({ name, desc: d.endsWith('.') ? d : d + '.' });
+      }
+    } else {
+      i++;
+    }
+  }
+  return abilities;
+}
+
+// For monsters that only have a plain text description (no structured JSON props),
+// extract Traits and Actions sections from the text.
+function _parseMonsterDescText(desc) {
+  if (!desc) return { special_abilities: [], actions: [] };
+  const actIdx = desc.search(/\bActions\b/);
+  const trIdx  = desc.search(/\bTraits?\b/);
+  const traitsText  = desc.slice(trIdx >= 0 ? trIdx + (trIdx >= 0 ? desc.match(/\bTraits?\b/)[0].length : 0) : 0,
+                                 actIdx >= 0 ? actIdx : undefined).trim();
+  const actionsText = actIdx >= 0 ? desc.slice(actIdx + desc.match(/\bActions\b/)[0].length).trim() : '';
+  return {
+    special_abilities: _parseDndAbilities(traitsText),
+    actions:           _parseDndAbilities(actionsText),
+  };
+}
+
 function mapMonster(raw) {
   const p = raw.properties || {};
 
@@ -182,11 +232,18 @@ function mapMonster(raw) {
   const hit_points = p['data-HpNum'] ?? (hpMatch ? parseInt(hpMatch[1]) : 0);
   const hit_dice   = hpMatch ? hpMatch[2] : hpStr;
 
-  const special_abilities = parseJsonField(p['data-Traits'])
+  let special_abilities = parseJsonField(p['data-Traits'])
     .map(t => ({ name: t.Name, desc: t.Desc || '' }));
 
-  const actions = parseJsonField(p['data-Actions'])
+  let actions = parseJsonField(p['data-Actions'])
     .map(a => ({ name: a.Name, desc: buildActionDesc(a) }));
+
+  // Fallback: parse plain-text description when no structured props exist
+  if (!special_abilities.length && !actions.length && raw.description) {
+    const parsed = _parseMonsterDescText(raw.description);
+    special_abilities = parsed.special_abilities;
+    actions           = parsed.actions;
+  }
 
   return {
     name:            raw.name,
@@ -208,7 +265,6 @@ function mapMonster(raw) {
     languages:       p.Languages || null,
     special_abilities,
     actions,
-    desc:            special_abilities.length || actions.length ? null : cleanDesc(raw.description),
     document__title: raw.book || raw.publisher || 'dnd-data',
     _source: 'local',
   };
