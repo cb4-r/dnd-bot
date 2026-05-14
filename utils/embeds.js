@@ -108,34 +108,38 @@ function embedSpell(spell) {
 }
 
 function embedMonster(monster) {
+  const stats = `STR ${monster.strength} | DEX ${monster.dexterity} | CON ${monster.constitution} | INT ${monster.intelligence} | WIS ${monster.wisdom} | CHA ${monster.charisma}`;
+  const meta  = [
+    `HP ${monster.hit_points} (${monster.hit_dice})`,
+    `AC ${monster.armor_class}`,
+    `Speed ${monster.speed ?? '—'}`,
+    `CR ${monster.challenge_rating}`,
+  ].join(' | ');
+
+  const descLines = [
+    `*${monster.size} ${monster.type}, ${monster.alignment}*`,
+    meta,
+    stats,
+    monster.senses    ? `Senses: ${monster.senses}`       : null,
+    monster.languages ? `Languages: ${monster.languages}` : null,
+  ].filter(Boolean).join('\n');
+
   const embed = new EmbedBuilder()
     .setTitle(`🐉 ${monster.name}`)
     .setColor(0xC0392B)
-    .setDescription(`*${monster.size} ${monster.type}, ${monster.alignment}*`)
-    .addFields(
-      { name: '❤️ Hit Points', value: `${monster.hit_points} (${monster.hit_dice})`, inline: true },
-      { name: '🛡️ Armor Class', value: String(monster.armor_class), inline: true },
-      { name: '💨 Speed', value: monster.speed ?? '—', inline: true },
-      { name: '💪 STR', value: String(monster.strength), inline: true },
-      { name: '🤸 DEX', value: String(monster.dexterity), inline: true },
-      { name: '🏋️ CON', value: String(monster.constitution), inline: true },
-      { name: '🧠 INT', value: String(monster.intelligence), inline: true },
-      { name: '👁️ WIS', value: String(monster.wisdom), inline: true },
-      { name: '✨ CHA', value: String(monster.charisma), inline: true },
-      { name: '⚔️ CR', value: String(monster.challenge_rating), inline: true },
-    );
-  if (monster.senses) embed.addFields({ name: '👁️ Senses', value: monster.senses, inline: true });
-  if (monster.languages) embed.addFields({ name: '🗣️ Languages', value: monster.languages, inline: true });
+    .setDescription(descLines);
+
   if (monster.special_abilities?.length) {
-    const abilities = monster.special_abilities.slice(0, 3)
+    const value = monster.special_abilities.slice(0, 3)
       .map(a => `**${a.name}:** ${truncate(a.desc, 150)}`).join('\n');
-    embed.addFields({ name: '✨ Special Abilities', value: abilities });
+    embed.addFields({ name: 'Special Abilities', value });
   }
   if (monster.actions?.length) {
-    const actions = monster.actions.slice(0, 3)
+    const value = monster.actions.slice(0, 3)
       .map(a => `**${a.name}:** ${truncate(a.desc, 150)}`).join('\n');
-    embed.addFields({ name: '⚔️ Actions', value: actions });
+    embed.addFields({ name: 'Actions', value });
   }
+
   embed.setFooter({ text: footer(monster) });
   return embed;
 }
