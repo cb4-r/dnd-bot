@@ -35,6 +35,12 @@ function _splitAtBoundary(text, max) {
   return text.slice(0, max);
 }
 
+function _pluralizeDuration(dur) {
+  return dur.replace(/(\d+)\s+(minute|hour|round|day|week)(?!s)/gi, (_, n, unit) =>
+    `${n} ${unit}${parseInt(n) !== 1 ? 's' : ''}`
+  );
+}
+
 // dnd-data embeds the meta block at the start of the description.
 // Extract duration from it and return the clean description body.
 function _parseLocalSpellDesc(raw) {
@@ -44,7 +50,7 @@ function _parseLocalSpellDesc(raw) {
   );
   if (!m) return { duration: null, cleanDesc: raw };
   return {
-    duration:  m[1].trim(),
+    duration:  _pluralizeDuration(m[1].trim()),
     cleanDesc: raw.slice(m.index + m[0].length).trimStart(),
   };
 }
