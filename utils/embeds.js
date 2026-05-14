@@ -38,8 +38,9 @@ function _splitAtBoundary(text, max) {
 // dnd-data embeds the meta block at the start of the description.
 // Extract duration from it and return the clean description body.
 function _parseLocalSpellDesc(raw) {
+  // Match explicit D&D 5e duration formats — avoids fragile lookaheads
   const m = raw.slice(0, 700).match(
-    /Duration\s*[:\s]+(Concentration(?:,\s*up\s+to\s+[\d\w\s]+?)?|Until\s+\w+|Instantaneous|Special|[\w ,]+?)(?=\s+[A-Z][a-z]{2})/i
+    /Duration\s*[:\s]+(Concentration,?\s+up\s+to\s+\d+\s+\w+s?|Instantaneous|Until\s+dispelled?|Special|\d+\s+\w+s?)/i
   );
   if (!m) return { duration: null, cleanDesc: raw };
   return {
