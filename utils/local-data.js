@@ -208,6 +208,7 @@ function mapMonster(raw) {
     languages:       p.Languages || null,
     special_abilities,
     actions,
+    desc:            special_abilities.length || actions.length ? null : cleanDesc(raw.description),
     document__title: raw.book || raw.publisher || 'dnd-data',
     _source: 'local',
   };

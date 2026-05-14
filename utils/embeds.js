@@ -108,18 +108,23 @@ function embedSpell(spell) {
 }
 
 function embedMonster(monster) {
-  const stats = `STR ${monster.strength} | DEX ${monster.dexterity} | CON ${monster.constitution} | INT ${monster.intelligence} | WIS ${monster.wisdom} | CHA ${monster.charisma}`;
-  const meta  = [
-    `HP ${monster.hit_points} (${monster.hit_dice})`,
-    `AC ${monster.armor_class}`,
-    `Speed ${monster.speed ?? '—'}`,
-    `CR ${monster.challenge_rating}`,
-  ].join(' | ');
+  const val = v => v !== '—' && v != null && v !== 0;
+
+  const metaParts = [
+    val(monster.hit_points) ? `HP ${monster.hit_points}${monster.hit_dice ? ` (${monster.hit_dice})` : ''}` : null,
+    val(monster.armor_class)     ? `AC ${monster.armor_class}`              : null,
+    val(monster.speed)           ? `Speed ${monster.speed}`                 : null,
+    val(monster.challenge_rating)? `CR ${monster.challenge_rating}`         : null,
+  ].filter(Boolean);
+
+  const statParts = [monster.strength, monster.dexterity, monster.constitution,
+                     monster.intelligence, monster.wisdom, monster.charisma];
+  const hasStats = statParts.some(v => v !== '—' && v != null);
 
   const descLines = [
     `*${monster.size} ${monster.type}, ${monster.alignment}*`,
-    meta,
-    stats,
+    metaParts.length ? metaParts.join(' | ') : null,
+    hasStats ? `STR ${monster.strength} | DEX ${monster.dexterity} | CON ${monster.constitution} | INT ${monster.intelligence} | WIS ${monster.wisdom} | CHA ${monster.charisma}` : null,
     monster.senses    ? `Senses: ${monster.senses}`       : null,
     monster.languages ? `Languages: ${monster.languages}` : null,
   ].filter(Boolean).join('\n');
@@ -138,6 +143,9 @@ function embedMonster(monster) {
     const value = monster.actions.slice(0, 3)
       .map(a => `**${a.name}:** ${truncate(a.desc, 150)}`).join('\n');
     embed.addFields({ name: 'Actions', value });
+  }
+  if (monster.desc) {
+    embed.addFields({ name: 'Description', value: truncate(monster.desc, 1024) });
   }
 
   embed.setFooter({ text: footer(monster) });
