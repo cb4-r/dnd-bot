@@ -18,22 +18,62 @@ function _skipLoreIntros(desc) {
 const sourceLabel = e => e._source === 'local' ? 'Local' : 'Open5e API';
 const footer      = e => `Source: ${e.document__title ?? 'SRD 5e'} • ${sourceLabel(e)}`;
 
+function _ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function _splitAtBoundary(text, max) {
+  if (text.length <= max) return text;
+  const paraBreak = text.lastIndexOf('\n\n', max);
+  if (paraBreak > max * 0.5) return text.slice(0, paraBreak);
+  const lineBreak = text.lastIndexOf('\n', max);
+  if (lineBreak > max * 0.5) return text.slice(0, lineBreak);
+  const spaceBreak = text.lastIndexOf(' ', max);
+  if (spaceBreak > max * 0.5) return text.slice(0, spaceBreak);
+  return text.slice(0, max);
+}
+
 function embedSpell(spell) {
-  const level = spell.level_int === 0 ? 'Cantrip' : `Level ${spell.level_int}`;
+  const levelStr = spell.level_int === 0 ? 'Cantrip' : `${_ordinal(spell.level_int)}-Level`;
+  const meta = [
+    `${levelStr} ${spell.school ?? ''}`.trim(),
+    spell.casting_time ? `Casting Time: ${spell.casting_time}` : null,
+    spell.range        ? `Range: ${spell.range}`               : null,
+    spell.components   ? `Components: ${spell.components}`     : null,
+    spell.duration     ? `Duration: ${spell.duration}`         : null,
+  ].filter(Boolean).join(' · ');
+
+  const fullDesc = spell.desc || '—';
+  const metaBlock = meta + '\n\n';
+  const firstMax = 4096 - metaBlock.length;
+
+  // Split description into chunks that fit Discord's limits
+  const chunks = [];
+  let remaining = fullDesc;
+  const first = _splitAtBoundary(remaining, firstMax);
+  chunks.push(first);
+  remaining = remaining.slice(first.length).trimStart();
+  while (remaining.length > 0) {
+    const chunk = _splitAtBoundary(remaining, 1024);
+    chunks.push(chunk);
+    remaining = remaining.slice(chunk.length).trimStart();
+  }
+
   const embed = new EmbedBuilder()
     .setTitle(`🔮 ${spell.name}`)
     .setColor(0x7B2FBE)
-    .setDescription(truncate(spell.desc, 400))
-    .addFields(
-      { name: 'Level', value: level, inline: true },
-      { name: 'School', value: spell.school ?? '—', inline: true },
-      { name: 'Casting Time', value: spell.casting_time ?? '—', inline: true },
-      { name: 'Range', value: spell.range ?? '—', inline: true },
-      { name: 'Duration', value: spell.duration ?? '—', inline: true },
-      { name: 'Components', value: spell.components ?? '—', inline: true },
-    );
-  if (spell.higher_level) embed.addFields({ name: '📈 At Higher Levels', value: truncate(spell.higher_level, 512) });
-  if (spell.concentration === 'yes') embed.addFields({ name: '⚠️', value: 'Requires concentration', inline: true });
+    .setDescription(metaBlock + chunks[0]);
+
+  for (let i = 1; i < chunks.length; i++) {
+    embed.addFields({ name: '​', value: chunks[i] });
+  }
+
+  if (spell.higher_level) {
+    embed.addFields({ name: '📈 At Higher Levels', value: truncate(spell.higher_level, 1024) });
+  }
+
   embed.setFooter({ text: footer(spell) });
   return embed;
 }
