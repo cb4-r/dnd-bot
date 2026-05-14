@@ -35,23 +35,45 @@ function _splitAtBoundary(text, max) {
   return text.slice(0, max);
 }
 
+// dnd-data embeds the meta block at the start of the description.
+// Extract duration from it and return the clean description body.
+function _parseLocalSpellDesc(raw) {
+  const m = raw.slice(0, 700).match(
+    /Duration\s*[:\s]+(Concentration(?:,\s*up\s+to\s+[\d\w\s]+?)?|Until\s+\w+|Instantaneous|Special|[\w ,]+?)(?=\s+[A-Z][a-z]{2})/i
+  );
+  if (!m) return { duration: null, cleanDesc: raw };
+  return {
+    duration:  m[1].trim(),
+    cleanDesc: raw.slice(m.index + m[0].length).trimStart(),
+  };
+}
+
 function embedSpell(spell) {
-  const levelStr = spell.level_int === 0 ? 'Cantrip' : `${_ordinal(spell.level_int)}-Level`;
+  const level = spell.level_int === 0 ? 'Cantrip' : _ordinal(spell.level_int);
+
+  let desc     = spell.desc || '—';
+  let duration = spell.duration !== '—' ? spell.duration : null;
+
+  if (spell._source === 'local') {
+    const parsed = _parseLocalSpellDesc(desc);
+    if (parsed.duration) duration = parsed.duration;
+    desc = parsed.cleanDesc;
+  }
+
   const meta = [
-    `${levelStr} ${spell.school ?? ''}`.trim(),
-    spell.casting_time ? `Casting Time: ${spell.casting_time}` : null,
-    spell.range        ? `Range: ${spell.range}`               : null,
-    spell.components   ? `Components: ${spell.components}`     : null,
-    spell.duration     ? `Duration: ${spell.duration}`         : null,
-  ].filter(Boolean).join(' · ');
+    level,
+    spell.school,
+    spell.casting_time,
+    spell.range,
+    spell.components,
+    duration,
+  ].filter(v => v && v !== '—').join(' | ');
 
-  const fullDesc = spell.desc || '—';
   const metaBlock = meta + '\n\n';
-  const firstMax = 4096 - metaBlock.length;
+  const firstMax  = 4096 - metaBlock.length;
 
-  // Split description into chunks that fit Discord's limits
   const chunks = [];
-  let remaining = fullDesc;
+  let remaining = desc;
   const first = _splitAtBoundary(remaining, firstMax);
   chunks.push(first);
   remaining = remaining.slice(first.length).trimStart();
