@@ -135,14 +135,16 @@ function embedMonster(monster) {
     .setDescription(descLines);
 
   if (monster.special_abilities?.length) {
-    const value = monster.special_abilities.slice(0, 3)
-      .map(a => `**${a.name}:** ${truncate(a.desc, 150)}`).join('\n');
-    embed.addFields({ name: 'Special Abilities', value });
+    embed.addFields({ name: 'Special Abilities', value: '​' });
+    for (const a of monster.special_abilities.slice(0, 5)) {
+      embed.addFields({ name: a.name, value: truncate(a.desc, 1024) });
+    }
   }
   if (monster.actions?.length) {
-    const value = monster.actions.slice(0, 3)
-      .map(a => `**${a.name}:** ${truncate(a.desc, 150)}`).join('\n');
-    embed.addFields({ name: 'Actions', value });
+    embed.addFields({ name: 'Actions', value: '​' });
+    for (const a of monster.actions.slice(0, 5)) {
+      embed.addFields({ name: a.name, value: truncate(a.desc, 1024) });
+    }
   }
   embed.setFooter({ text: footer(monster) });
   return embed;
